@@ -32,3 +32,28 @@ html, body {
   justify-content: center;
   border-radius: 50%;
 }
+
+.logo-icon.light {
+  color: black;
+}
+
+.logo-icon.dark {
+  color: white;
+}
+
+.menu-bar{
+  height: 93vh;
+  font-size: large;
+  position: relative;
+  top: 10px;
+  bottom: 10px;
+}
+
+.toggle-btn{
+  position: absolute;
+  bottom: 30px;
+  left: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
