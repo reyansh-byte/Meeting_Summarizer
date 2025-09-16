@@ -1,19 +1,29 @@
-import { Card, Upload, message, Typography, Input, Select, Button, Row, Col } from "antd";
+import {
+  Card,
+  Upload,
+  message,
+  Typography,
+  Input,
+  Button,
+  Row,
+  Col,
+  Spin,
+} from "antd";
 import { InboxOutlined } from "@ant-design/icons";
 import { useState } from "react";
 import axios from "axios";
 
 const { Dragger } = Upload;
-const { Paragraph } = Typography;
+const { Paragraph, Text } = Typography;
 const { TextArea } = Input;
 
 function SummaryContainer() {
   const [context, setContext] = useState("");
-  const [whisperModel, setWhisperModel] = useState("small");
-  const [summaryModel, setSummaryModel] = useState("llama3.2:latest");
   const [file, setFile] = useState(null);
   const [summary, setSummary] = useState("");
-  const [transcript, setTranscript] = useState(""); // NEW: Show transcript too
+  const [transcript, setTranscript] = useState("");
+  const [metadata, setMetadata] = useState({});
+  const [loading, setLoading] = useState(false);
 
   const props = {
     name: "file",
@@ -29,69 +39,95 @@ function SummaryContainer() {
     if (!file) {
       return message.error("Please upload a file first.");
     }
-
     const formData = new FormData();
     formData.append("file", file);
     formData.append("context", context);
-    formData.append("whisperModel", whisperModel);
-    formData.append("summaryModel", summaryModel);
 
     try {
+      setLoading(true);
+      setSummary("");
+      setTranscript("");
+      setMetadata({});
       message.loading({ content: "Processing...", key: "processing" });
 
-      const res = await axios.post("http://localhost:5000/api/summarize", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      const res = await axios.post("http://localhost:5000/upload", formData);
 
-      // Expecting backend to send { transcript: "...", summary: "..." }
-      setTranscript(res.data.transcript || "");
-      setSummary(res.data.summary || "");
+      setTranscript(res.data.transcription || "No transcription available.");
+      setSummary(res.data.summary || "No summary generated.");
+      setMetadata(res.data.metadata || {});
 
       message.success({ content: "Summary generated!", key: "processing" });
-    } catch (error) {
-      console.error(error);
+    } catch (err) {
+      console.error("Upload error:", err);
+      setSummary("Error: Could not generate summary.");
+      setTranscript("Error: Could not transcribe audio.");
+      setMetadata({});
       message.error({ content: "Error processing file", key: "processing" });
+    } finally {
+      setLoading(false);
     }
+  };
+
+  const handleClear = () => {
+    setFile(null);
+    setSummary("");
+    setTranscript("");
+    setMetadata({});
+    setContext("");
   };
 
   const cardStyle = {
     background: "#fff",
     borderRadius: 8,
     boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-    height: "100%",
   };
 
   return (
     <div style={{ padding: 24 }}>
       <Row gutter={[16, 16]}>
-        {/* Summary */}
         <Col xs={24} md={12}>
           <Card title="Meeting Summary" style={cardStyle}>
-            <Paragraph>{summary || "Your meeting summary will appear here."}</Paragraph>
+            {loading ? (
+              <Spin />
+            ) : (
+              <>
+                <Paragraph>{summary || "Your meeting summary will appear here."}</Paragraph>
+                {metadata.summaryMethod && (
+                  <Text type="secondary">
+                    Method: {metadata.summaryMethod}{" "}
+                    {metadata.modelUsed ? ` | Model: ${metadata.modelUsed}` : ""}
+                  </Text>
+                )}
+              </>
+            )}
           </Card>
         </Col>
 
-        {/* Upload */}
         <Col xs={24} md={12}>
-          <Card title="Upload Meeting Audio/Video" style={cardStyle}>
+          <Card title="Upload Audio/Video" style={cardStyle}>
             <Dragger {...props}>
               <p className="ant-upload-drag-icon">
                 <InboxOutlined />
               </p>
               <p className="ant-upload-text">Click or drag file here</p>
-              <p className="ant-upload-hint">Audio and video formats only</p>
+              <p className="ant-upload-hint">Audio/video formats only</p>
             </Dragger>
+            {file && <Text type="secondary">Selected: {file.name}</Text>}
           </Card>
         </Col>
 
-        {/* Transcript */}
         <Col xs={24} md={12}>
           <Card title="Transcript" style={cardStyle}>
-            <Paragraph>{transcript || "Transcript will appear here."}</Paragraph>
+            {loading ? (
+              <Spin />
+            ) : (
+              <Paragraph>
+                {transcript || "Transcript will appear here."}
+              </Paragraph>
+            )}
           </Card>
         </Col>
 
-        {/* Context */}
         <Col xs={24} md={12}>
           <Card title="Context (optional)" style={cardStyle}>
             <TextArea
@@ -103,44 +139,19 @@ function SummaryContainer() {
           </Card>
         </Col>
 
-        {/* Model Selection */}
         <Col xs={24} md={12}>
-          <Card title="Model Selection" style={cardStyle}>
-            <Select
-              value={whisperModel}
-              onChange={setWhisperModel}
-              options={[
-                { value: "tiny", label: "tiny" },
-                { value: "small", label: "small" },
-                { value: "medium", label: "medium" },
-                { value: "large", label: "large" },
-              ]}
-              style={{ marginBottom: 8, width: "100%" }}
-            />
-            <Select
-              value={summaryModel}
-              onChange={setSummaryModel}
-              options={[
-                { value: "llama3.2:latest", label: "llama3.2:latest" },
-                { value: "gpt-4o", label: "gpt-4o" },
-                { value: "mistral", label: "mistral" },
-              ]}
-              style={{ marginBottom: 8, width: "100%" }}
-            />
+          <Card title="Actions" style={cardStyle}>
             <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <Button
-                danger
-                size="small"
-                onClick={() => {
-                  setFile(null);
-                  setSummary("");
-                  setTranscript("");
-                }}
-              >
+              <Button danger size="small" onClick={handleClear}>
                 Clear
               </Button>
-              <Button type="primary" size="small" onClick={handleSubmit}>
-                Submit
+              <Button
+                type="primary"
+                size="small"
+                onClick={handleSubmit}
+                disabled={loading}
+              >
+                {loading ? "Processing..." : "Submit"}
               </Button>
             </div>
           </Card>
